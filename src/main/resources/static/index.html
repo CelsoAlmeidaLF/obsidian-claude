@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Obsidian Claude Bridge</title>
+    <!-- Modern Typography: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar: Pesquisa Semântica -->
+        <aside class="sidebar glass-panel">
+            <div class="sidebar-header">
+                <h2>Obsidian Bridge</h2>
+                <div class="status-indicator">
+                    <span class="dot pulse"></span>
+                    <span>Conectado</span>
+                </div>
+            </div>
+            
+            <div class="search-section">
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" width="20" height="20">
+                        <path fill="currentColor" d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Busca semântica avançada..." autocomplete="off">
+                </div>
+                <!-- Loading Spinner para a Busca -->
+                <div id="searchLoader" class="loader hidden"></div>
+                <div id="searchResults" class="search-results">
+                    <div class="empty-state">Digite algo para buscar no vault.</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área Principal: Chat -->
+        <main class="chat-area">
+            <div id="chatFeed" class="chat-feed glass-panel">
+                <div class="message assistant slide-up">
+                    <div class="avatar assistant-avatar">
+                        <svg viewBox="0 0 24 24" width="24" height="24">
+                            <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                        </svg>
+                    </div>
+                    <div class="content markdown-body">
+                        <p>Olá! Eu sou o seu assistente inteligente operando no Vault local do Obsidian.</p>
+                        <p>Posso fazer conexões, resumos ou buscar informações nas suas notas usando o modelo atual. Como posso ajudar agora?</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Entrada de Chat -->
+            <div class="input-area glass-panel">
+                <form id="chatForm">
+                    <textarea id="messageInput" placeholder="Faça uma pergunta sobre o seu Vault..." rows="1" autofocus></textarea>
+                    <button type="submit" id="sendBtn" class="glow-on-hover transition-all" aria-label="Enviar mensagem">
+                        <svg viewBox="0 0 24 24" width="24" height="24">
+                            <path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </form>
+            </div>
+        </main>
+    </div>
+    
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -10,5 +10,6 @@ import com.systekna.obsidian.domain.model.NoteType;
 public interface LlmPort {
     String analyze(NoteType type, String context);
     String chat(String systemPrompt, java.util.List<String[]> history, String userMessage);
+    void chatStream(String systemPrompt, java.util.List<String[]> history, String userMessage, java.util.function.Consumer<String> onToken);
     float[] embed(String text);                  // gera embedding para busca semântica
 }
