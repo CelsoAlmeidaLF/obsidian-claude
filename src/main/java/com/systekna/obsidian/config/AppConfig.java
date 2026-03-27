@@ -37,6 +37,15 @@ public class AppConfig {
     @Value("${obsidian.db.path:./obsidian-embeddings.db}")
     private String dbPath;
 
+    @Value("${llm.provider:claude}")
+    private String llmProvider;
+
+    @Value("${ollama.api.url:http://localhost:11434/api/chat}")
+    private String ollamaUrl;
+
+    @Value("${ollama.model:llama3}")
+    private String ollamaModel;
+
     // ─── Ports driven (infraestrutura) ───────────────────────────────────────
 
     @Bean
@@ -46,6 +55,9 @@ public class AppConfig {
 
     @Bean
     public LlmPort llmPort() {
+        if ("ollama".equalsIgnoreCase(llmProvider)) {
+            return new com.systekna.obsidian.adapter.out.llm.OllamaApiAdapter(ollamaUrl, ollamaModel);
+        }
         return new ClaudeApiLlmAdapter(apiKey);
     }
 

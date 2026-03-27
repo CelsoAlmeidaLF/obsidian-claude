@@ -5,6 +5,8 @@ import com.systekna.obsidian.domain.model.NoteType;
 import com.systekna.obsidian.domain.model.SearchResult;
 import com.systekna.obsidian.domain.port.out.SearchPort;
 import com.systekna.obsidian.domain.port.out.VaultPort;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
 import java.sql.*;
 import java.time.LocalDateTime;
@@ -13,21 +15,29 @@ import java.util.stream.Collectors;
 
 /**
  * Adapter driven: persiste embeddings em SQLite e calcula similaridade cosine.
- * Sem dependência de framework de IA externo.
+ * Utiliza HikariCP para pool otimizado de persistência em concorrência.
  */
 public class SQLiteEmbeddingAdapter implements SearchPort {
 
-    private final Connection conn;
-    private final VaultPort  vault;
+    private final HikariDataSource dataSource;
+    private final VaultPort vault;
 
     public SQLiteEmbeddingAdapter(String dbPath, VaultPort vault) throws SQLException {
         this.vault = vault;
-        this.conn  = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
+        
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl("jdbc:sqlite:" + dbPath);
+        config.setMaximumPoolSize(10);
+        config.setPoolName("SQLite-Embedding-Pool");
+        // Em SQLite, auto-commit costuma ser requerido a menos que transações sejam explicitamente abertas.
+        this.dataSource = new HikariDataSource(config);
+
         initSchema();
     }
 
     private void initSchema() throws SQLException {
-        try (Statement st = conn.createStatement()) {
+        try (Connection conn = dataSource.getConnection();
+             Statement st = conn.createStatement()) {
             st.execute("""
                 CREATE TABLE IF NOT EXISTS embeddings (
                     note_id   TEXT PRIMARY KEY,
@@ -41,10 +51,12 @@ public class SQLiteEmbeddingAdapter implements SearchPort {
 
     @Override
     public void index(String noteId, String content, float[] embedding) {
-        try (PreparedStatement ps = conn.prepareStatement("""
+        String sql = """
             INSERT OR REPLACE INTO embeddings(note_id, content, vector, indexed_at)
             VALUES (?, ?, ?, ?)
-        """)) {
+        """;
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, noteId);
             ps.setString(2, content);
             ps.setBytes(3, floatsToBytes(embedding));
@@ -57,8 +69,8 @@ public class SQLiteEmbeddingAdapter implements SearchPort {
 
     @Override
     public List<SearchResult> search(float[] queryEmbedding, int topK) {
-        try (PreparedStatement ps = conn.prepareStatement(
-                "SELECT note_id, content, vector FROM embeddings")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("SELECT note_id, content, vector FROM embeddings")) {
 
             ResultSet rs = ps.executeQuery();
             List<ScoredNote> scored = new ArrayList<>();
@@ -86,8 +98,8 @@ public class SQLiteEmbeddingAdapter implements SearchPort {
 
     @Override
     public void remove(String noteId) {
-        try (PreparedStatement ps = conn.prepareStatement(
-                "DELETE FROM embeddings WHERE note_id = ?")) {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement("DELETE FROM embeddings WHERE note_id = ?")) {
             ps.setString(1, noteId);
             ps.executeUpdate();
         } catch (SQLException e) {
@@ -97,7 +109,8 @@ public class SQLiteEmbeddingAdapter implements SearchPort {
 
     @Override
     public void reindexAll() {
-        try (Statement st = conn.createStatement()) {
+        try (Connection conn = dataSource.getConnection();
+             Statement st = conn.createStatement()) {
             st.execute("DELETE FROM embeddings");
         } catch (SQLException e) {
             throw new RuntimeException("Erro ao limpar índice", e);

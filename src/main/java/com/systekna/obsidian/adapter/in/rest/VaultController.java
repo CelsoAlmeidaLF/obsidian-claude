@@ -64,6 +64,29 @@ public class VaultController {
         return ResponseEntity.ok(Map.of("response", response));
     }
 
+    /** Chat Streaming (SSE) com contexto do vault */
+    @PostMapping(value = "/chat/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public org.springframework.web.servlet.mvc.method.annotation.SseEmitter chatStream(@RequestBody ChatRequest req) {
+        org.springframework.web.servlet.mvc.method.annotation.SseEmitter emitter = new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(120000L); // 2 minutos
+        
+        java.util.concurrent.Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                chatUseCase.chatStream(req.message(), req.history(), token -> {
+                    try {
+                        emitter.send(token);
+                    } catch (Exception e) {
+                        emitter.completeWithError(e);
+                    }
+                });
+                emitter.complete();
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
+        });
+        
+        return emitter;
+    }
+
     /** Busca semântica no vault */
     @GetMapping("/search")
     public ResponseEntity<?> search(

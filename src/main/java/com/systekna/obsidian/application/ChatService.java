@@ -38,6 +38,16 @@ public class ChatService implements ChatUseCase {
         return llm.chat(enrichedSystem, history, userMessage);
     }
 
+    @Override
+    public void chatStream(String userMessage, List<String[]> history, java.util.function.Consumer<String> onToken) {
+        // Busca notas relevantes para enriquecer o contexto
+        List<SearchResult> relevant = search.search(userMessage, 3);
+        String contextBlock = buildContextBlock(relevant);
+
+        String enrichedSystem = SYSTEM_PROMPT + "\n\nContexto do vault:\n" + contextBlock;
+        llm.chatStream(enrichedSystem, history, userMessage, onToken);
+    }
+
     private String buildContextBlock(List<SearchResult> results) {
         if (results.isEmpty()) return "(nenhuma nota relevante encontrada)";
         return results.stream()

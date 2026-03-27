@@ -72,6 +72,11 @@ public class ClaudeApiLlmAdapter implements LlmPort {
     }
 
     @Override
+    public void chatStream(String systemPrompt, List<String[]> history, String userMessage, java.util.function.Consumer<String> onToken) {
+        callApiStream(systemPrompt, history, userMessage, 2000, onToken);
+    }
+
+    @Override
     public float[] embed(String text) {
         // Nota: a API de embeddings do Claude ainda não está disponível publicamente.
         // Implementação com embeddings via API de mensagens (representação simplificada).
@@ -112,6 +117,51 @@ public class ClaudeApiLlmAdapter implements LlmPort {
             }
         } catch (IOException e) {
             throw new RuntimeException("Falha ao chamar Claude API", e);
+        }
+    }
+
+    private void callApiStream(String system, List<String[]> history, String userMessage, int maxTokens, java.util.function.Consumer<String> onToken) {
+        try {
+            ObjectNode body = mapper.createObjectNode();
+            body.put("model", MODEL);
+            body.put("max_tokens", maxTokens);
+            body.put("system", system);
+            body.put("stream", true);
+
+            ArrayNode messages = body.putArray("messages");
+            for (String[] turn : history) {
+                messages.addObject().put("role", turn[0]).put("content", turn[1]);
+            }
+            messages.addObject().put("role", "user").put("content", userMessage);
+
+            Request request = new Request.Builder()
+                .url(API_URL)
+                .addHeader("x-api-key", apiKey)
+                .addHeader("anthropic-version", API_VER)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(mapper.writeValueAsString(body), JSON))
+                .build();
+
+            try (Response response = http.newCall(request).execute()) {
+                if (!response.isSuccessful()) {
+                    throw new RuntimeException("Claude API erro " + response.code() + ": " + response.body().string());
+                }
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(response.body().byteStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.startsWith("data: ")) {
+                            String data = line.substring(6);
+                            if (data.equals("[DONE]")) break;
+                            JsonNode chunk = mapper.readTree(data);
+                            if (chunk.has("type") && "content_block_delta".equals(chunk.get("type").asText())) {
+                                onToken.accept(chunk.at("/delta/text").asText());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Falha ao chamar Claude API stream", e);
         }
     }
 

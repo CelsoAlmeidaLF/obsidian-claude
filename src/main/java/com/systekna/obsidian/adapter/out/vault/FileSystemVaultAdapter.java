@@ -1,9 +1,11 @@
 package com.systekna.obsidian.adapter.out.vault;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.systekna.obsidian.domain.model.Note;
 import com.systekna.obsidian.domain.model.NoteType;
 import com.systekna.obsidian.domain.port.out.VaultPort;
-import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -21,7 +23,7 @@ import java.util.stream.Collectors;
 public class FileSystemVaultAdapter implements VaultPort {
 
     private final Path vaultRoot;
-    private final Yaml yaml = new Yaml();
+    private final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     public FileSystemVaultAdapter(Path vaultRoot) {
         this.vaultRoot = vaultRoot;
@@ -65,7 +67,18 @@ public class FileSystemVaultAdapter implements VaultPort {
     public Note save(Note note) {
         Path file = vaultRoot.resolve(note.getId());
         try {
-            Files.createDirectories(file.getParent());
+            if (Files.exists(file)) {
+                Path backupDir = vaultRoot.resolve(".bridge-backups");
+                Files.createDirectories(backupDir);
+                
+                String timestamp = LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                String backupFilename = file.getFileName().toString().replace(".md", "_" + timestamp + ".md");
+                Path backupFile = backupDir.resolve(backupFilename);
+                Files.copy(file, backupFile, StandardCopyOption.REPLACE_EXISTING);
+            } else {
+                Files.createDirectories(file.getParent());
+            }
+
             Files.writeString(file, note.getRawContent(), StandardCharsets.UTF_8);
             return note;
         } catch (IOException e) {
@@ -98,14 +111,17 @@ public class FileSystemVaultAdapter implements VaultPort {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> extractFrontmatter(String content) {
         if (!content.startsWith("---")) return Map.of();
         int end = content.indexOf("---", 3);
         if (end < 0) return Map.of();
         String yamlBlock = content.substring(3, end).trim();
-        Object parsed = yaml.load(yamlBlock);
-        return (parsed instanceof Map) ? (Map<String, Object>) parsed : Map.of();
+        try {
+            Map<String, Object> parsed = yamlMapper.readValue(yamlBlock, new TypeReference<>() {});
+            return parsed != null ? parsed : Map.of();
+        } catch (Exception e) {
+            return Map.of();
+        }
     }
 
     private String extractTitle(String content, String fallbackId) {

@@ -17,6 +17,9 @@ public class FileWatcherAdapter implements Runnable {
     private final TemplateUseCase templateUseCase;
     private volatile boolean running = false;
 
+    private final java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.ScheduledFuture<?>> debounceMap = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ScheduledExecutorService scheduler = java.util.concurrent.Executors.newScheduledThreadPool(1);
+
     public FileWatcherAdapter(Path vaultRoot, TemplateUseCase templateUseCase) {
         this.vaultRoot       = vaultRoot;
         this.templateUseCase = templateUseCase;
@@ -31,6 +34,7 @@ public class FileWatcherAdapter implements Runnable {
 
     public void stop() {
         running = false;
+        scheduler.shutdown();
     }
 
     @Override
@@ -63,15 +67,21 @@ public class FileWatcherAdapter implements Runnable {
     }
 
     private void handleChange(String noteId) {
-        try {
-            // Pequeno delay para garantir que o arquivo foi totalmente salvo
-            Thread.sleep(500);
-            templateUseCase.processNote(noteId);
-        } catch (IllegalStateException e) {
-            // Nota já processada ou sem conteúdo — ignorar silenciosamente
-        } catch (Exception e) {
-            System.err.println("[FileWatcher] Erro ao processar " + noteId + ": " + e.getMessage());
-        }
+        var existingTask = debounceMap.get(noteId);
+        if (existingTask != null) existingTask.cancel(false);
+
+        var newTask = scheduler.schedule(() -> {
+            debounceMap.remove(noteId);
+            try {
+                templateUseCase.processNote(noteId);
+            } catch (IllegalStateException e) {
+                // Nota já processada ou sem conteúdo — ignorar silenciosamente
+            } catch (Exception e) {
+                System.err.println("[FileWatcher] Erro ao processar " + noteId + ": " + e.getMessage());
+            }
+        }, 500, java.util.concurrent.TimeUnit.MILLISECONDS);
+
+        debounceMap.put(noteId, newTask);
     }
 
     private void registerAll(Path root, WatchService watcher) throws IOException {
